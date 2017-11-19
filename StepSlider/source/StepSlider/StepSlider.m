@@ -213,7 +213,7 @@ void withoutCAAnimation(withoutAnimationBlock code)
     
     _trackCirclesArray = [self clearExcessLayers:_trackCirclesArray];
     
-    CGFloat currentWidth = self.adjustLabel ? _trackLabelsArray.firstObject.bounds.size.width * 2 : _trackLabelsArray.firstObject.bounds.size.width;
+    CGFloat currentWidth = !self.adjustLabel ? _trackLabelsArray.firstObject.bounds.size.width * 2 : _trackLabelsArray.firstObject.bounds.size.width;
     if ((currentWidth > 0 && currentWidth != stepWidth) || !self.labels.count) {
         [self removeLabelLayers];
     }
@@ -311,7 +311,7 @@ void withoutCAAnimation(withoutAnimationBlock code)
         
         for (NSUInteger i = 0; i < self.labels.count; i++) {
             CGSize size;
-            if (self.adjustLabel && (i == 0 || i == self.labels.count - 1)) {
+            if (!self.adjustLabel && (i == 0 || i == self.labels.count - 1)) {
                 size = CGSizeMake([self roundForTextDrawing:maxWidth / 2.f + maxRadius], CGFLOAT_MAX);
             } else {
                 size = CGSizeMake([self roundForTextDrawing:maxWidth], CGFLOAT_MAX);
@@ -468,7 +468,7 @@ void withoutCAAnimation(withoutAnimationBlock code)
         CGPoint anchorPoint = CGPointMake(0.5f, 0.f);
         NSString *alignmentMode = kCAAlignmentCenter;
         
-        if (self.adjustLabel) {
+        if (!self.adjustLabel) {
             if (index == 0) {
                 alignmentMode = kCAAlignmentLeft;
                 size.width = size.width / 2.f + maxRadius;
