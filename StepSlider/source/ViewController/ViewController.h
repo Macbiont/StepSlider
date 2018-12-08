@@ -7,7 +7,7 @@
 //
 
 #import <UIKit/UIKit.h>
-#import "StepSlider.h"
+#import <StepSlider/StepSlider.h>
 
 @interface ViewController : UIViewController
 
@@ -24,6 +24,7 @@
 - (IBAction)changeTrackColor:(id)sender;
 - (IBAction)changeTrackCircleRaidus:(id)sender;
 - (IBAction)changeTrackHeight:(id)sender;
+- (IBAction)changeTrackCircleImage:(UIButton *)sender;
 
 - (IBAction)toggleLabels:(UIButton *)sender;
 - (IBAction)changeLabelsFont:(id)sender;

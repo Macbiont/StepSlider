@@ -8,6 +8,12 @@
 
 #import <UIKit/UIKit.h>
 
+//! Project version number for StepSlider.
+FOUNDATION_EXPORT double StepSliderVersionNumber;
+
+//! Project version string for StepSlider.
+FOUNDATION_EXPORT const unsigned char StepSliderVersionString[];
+
 /**
  *  Vertical orientatons of dot labels.
  */
@@ -107,6 +113,12 @@ IB_DESIGNABLE
  */
 @property (nonatomic) IBInspectable BOOL adjustLabel;
 
+/**
+ *  Generate haptic feedback when value was changed. Ignored if low power mode is turned on.
+ *  Default value is `false`.
+ */
+@property (nonatomic) IBInspectable BOOL enableHapticFeedback;
+
 
 /**
  *  Set the `index` property to parameter value.
@@ -115,5 +127,15 @@ IB_DESIGNABLE
  *  @param animated `YES` to animate changing of the `index` property.
  */
 - (void)setIndex:(NSUInteger)index animated:(BOOL)animated;
+
+
+/**
+ *  Sets the image to use for track circle for the specified state.
+ *  Currently supported only `UIControlStateNormal` and `UIControlStateSelected`.
+ *
+ *  @param image The image to use for the specified state.
+ *  @param state The state that uses the specified image.
+ */
+- (void)setTrackCircleImage:(UIImage *)image forState:(UIControlState)state;
 
 @end

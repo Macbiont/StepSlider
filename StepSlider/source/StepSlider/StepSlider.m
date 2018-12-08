@@ -33,7 +33,10 @@ void withoutCAAnimation(withoutAnimationBlock code)
     CAShapeLayer *_trackLayer;
     CAShapeLayer *_sliderCircleLayer;
     NSMutableArray <CAShapeLayer *> *_trackCirclesArray;
-    NSMutableArray <CATextLayer *>  *_trackLabelsArray;
+    NSMutableArray <CATextLayer *> *_trackLabelsArray;
+    NSMutableDictionary <NSNumber *, UIImage *> *_trackCircleImages;
+
+    UIImpactFeedbackGenerator* _selectFeedback;
     
     BOOL animateLayouts;
     
@@ -84,6 +87,7 @@ void withoutCAAnimation(withoutAnimationBlock code)
     _dotsInteractionEnabled = YES;
     _trackCirclesArray = [[NSMutableArray alloc] init];
     _trackLabelsArray  = [[NSMutableArray alloc] init];
+    _trackCircleImages = [[NSMutableDictionary alloc] init];
     
     _trackLayer = [CAShapeLayer layer];
     _sliderCircleLayer = [CAShapeLayer layer];
@@ -243,31 +247,60 @@ void withoutCAAnimation(withoutAnimationBlock code)
             [_trackCirclesArray addObject:trackCircle];
         }
         
+        
         trackCircle.bounds   = CGRectMake(0.f, 0.f, circleFrameSide, circleFrameSide);
-        trackCircle.path     = [UIBezierPath bezierPathWithRoundedRect:trackCircle.bounds cornerRadius:circleFrameSide / 2].CGPath;
         trackCircle.position = CGPointMake(contentFrame.origin.x + stepWidth * i, CGRectGetMidY(contentFrame));
         
+        CGImageRef trackCircleImage = [self trackCircleImage:trackCircle];
+        if (!trackCircleImage) {
+            trackCircle.path = [UIBezierPath bezierPathWithRoundedRect:trackCircle.bounds cornerRadius:circleFrameSide / 2].CGPath;
+            trackCircle.contents = nil;
+        } else {
+            trackCircle.path = NULL;
+        }
+
         trackLabel.position        = CGPointMake(contentFrame.origin.x + stepWidth * i, labelsY);
         trackLabel.foregroundColor = self.labelColor.CGColor;
-    
+        
         if (animated) {
-            CGColorRef newColor = [self trackCircleColor:trackCircle];
-            CGColorRef oldColor = trackCircle.fillColor;
-            
-            if (!CGColorEqualToColor(newColor, trackCircle.fillColor)) {
+            if (trackCircleImage) {
+                CGImageRef oldImage = (__bridge CGImageRef)(trackCircle.contents);
                 
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(animationTime * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                    trackCircle.fillColor = newColor;
-                    CABasicAnimation *basicTrackCircleAnimation = [CABasicAnimation animationWithKeyPath:@"fillColor"];
-                    basicTrackCircleAnimation.duration = [CATransaction animationDuration] * circleAnimation;
-                    basicTrackCircleAnimation.fromValue = (__bridge id _Nullable)(oldColor);
-                    [trackCircle addAnimation:basicTrackCircleAnimation forKey:@"fillColor"];
-                });
+                if (oldImage != trackCircleImage) {
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(animationTime * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        trackCircle.contents = (__bridge id _Nullable)(trackCircleImage);
+                        
+                        CABasicAnimation *basicTrackCircleAnimation = [CABasicAnimation animationWithKeyPath:kTrackAnimation];
+                        basicTrackCircleAnimation.duration = [CATransaction animationDuration] * circleAnimation;
+                        basicTrackCircleAnimation.fromValue = (__bridge id _Nullable)(oldImage);
+                        [trackCircle addAnimation:basicTrackCircleAnimation forKey:kTrackAnimation];
+                    });
+                    
+                    animationTime += animationTimeDiff;
+                }
+            } else {
+                CGColorRef newColor = [self trackCircleColor:trackCircle];
+                CGColorRef oldColor = trackCircle.fillColor;
                 
-                animationTime += animationTimeDiff;
+                if (!CGColorEqualToColor(newColor, trackCircle.fillColor)) {
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(animationTime * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        trackCircle.fillColor = newColor;
+                        
+                        CABasicAnimation *basicTrackCircleAnimation = [CABasicAnimation animationWithKeyPath:kTrackAnimation];
+                        basicTrackCircleAnimation.duration = [CATransaction animationDuration] * circleAnimation;
+                        basicTrackCircleAnimation.fromValue = (__bridge id _Nullable)(oldColor);
+                        [trackCircle addAnimation:basicTrackCircleAnimation forKey:kTrackAnimation];
+                    });
+                    
+                    animationTime += animationTimeDiff;
+                }
             }
         } else {
-            trackCircle.fillColor = [self trackCircleColor:trackCircle];
+            if (trackCircleImage) {
+                trackCircle.contents = (__bridge id _Nullable)(trackCircleImage);
+            } else {
+                trackCircle.fillColor = [self trackCircleColor:trackCircle];
+            }
         }
         
     }
@@ -374,9 +407,32 @@ void withoutCAAnimation(withoutAnimationBlock code)
     return self.sliderPosition / (_trackLayer.bounds.size.width / (self.maxCount - 1));
 }
 
+- (BOOL)trackCircleIsSeleceted:(CAShapeLayer *)trackCircle
+{
+    return self.sliderPosition + diff >= [self trackCirclePosition:trackCircle];
+}
+
+#pragma mark - Track circle
+
 - (CGColorRef)trackCircleColor:(CAShapeLayer *)trackCircle
 {
-    return self.sliderPosition + diff >= [self trackCirclePosition:trackCircle] ? self.tintColor.CGColor : self.trackColor.CGColor;
+    return [self trackCircleIsSeleceted:trackCircle] ? self.tintColor.CGColor : self.trackColor.CGColor;
+}
+
+- (CGImageRef)trackCircleImage:(CAShapeLayer *)trackCircle
+{
+    return [self trackCircleImageForState:[self trackCircleIsSeleceted:trackCircle] ? UIControlStateSelected : UIControlStateNormal].CGImage;
+}
+
+- (void)setTrackCircleImage:(UIImage *)image forState:(UIControlState)state
+{
+    _trackCircleImages[@(state)] = image;
+    [self setNeedsLayout];
+}
+
+- (UIImage *)trackCircleImageForState:(UIControlState)state
+{
+    return _trackCircleImages[@(state)] ? : _trackCircleImages[@(UIControlStateNormal)];
 }
 
 #pragma mark - Touches
@@ -386,6 +442,11 @@ void withoutCAAnimation(withoutAnimationBlock code)
     startTouchPosition = [touch locationInView:self];
     startSliderPosition = _sliderCircleLayer.position;
 
+    if (self.enableHapticFeedback && ![[NSProcessInfo processInfo] isLowPowerModeEnabled]) {
+        _selectFeedback = [[UIImpactFeedbackGenerator alloc] init];
+    }
+
+    [_selectFeedback prepare];
     if (CGRectContainsPoint(_sliderCircleLayer.frame, startTouchPosition)) {
         return YES;
     } else if (self.isDotsInteractionEnabled) {
@@ -402,6 +463,8 @@ void withoutCAAnimation(withoutAnimationBlock code)
                 
                 if (oldIndex != _index) {
                     [self sendActionsForControlEvents:UIControlEventValueChanged];
+                    [_selectFeedback impactOccurred];
+                    [_selectFeedback prepare];
                 }
                 animateLayouts = YES;
                 [self setNeedsLayout];
@@ -419,16 +482,24 @@ void withoutCAAnimation(withoutAnimationBlock code)
     CGFloat limitedPosition = fminf(fmaxf(maxRadius, position), self.bounds.size.width - maxRadius);
     
     withoutCAAnimation(^{
-        _sliderCircleLayer.position = CGPointMake(limitedPosition, _sliderCircleLayer.position.y);
-        _trackLayer.path = [self fillingPath];
+        self->_sliderCircleLayer.position = CGPointMake(limitedPosition, self->_sliderCircleLayer.position.y);
+        self->_trackLayer.path = [self fillingPath];
         
-        NSUInteger index = (self.sliderPosition + diff) / (_trackLayer.bounds.size.width / (self.maxCount - 1));
-        if (_index != index) {
-            for (CAShapeLayer *trackCircle in _trackCirclesArray) {
-                trackCircle.fillColor = [self trackCircleColor:trackCircle];
+        NSUInteger index = (self.sliderPosition + self->diff) / (self->_trackLayer.bounds.size.width / (self.maxCount - 1));
+        if (self->_index != index) {
+            for (CAShapeLayer *trackCircle in self->_trackCirclesArray) {
+                CGImageRef trackCircleImage = [self trackCircleImage:trackCircle];
+                
+                if (trackCircleImage) {
+                    trackCircle.contents = (__bridge id _Nullable)(trackCircleImage);
+                } else {
+                    trackCircle.fillColor = [self trackCircleColor:trackCircle];
+                }
             }
-            _index = index;
+            self->_index = index;
             [self sendActionsForControlEvents:UIControlEventValueChanged];
+            [self->_selectFeedback impactOccurred];
+            [self->_selectFeedback prepare];
         }
     });
     
@@ -456,6 +527,7 @@ void withoutCAAnimation(withoutAnimationBlock code)
     
     animateLayouts = YES;
     [self setNeedsLayout];
+    _selectFeedback = nil;
 }
 
 #pragma mark - Texts
